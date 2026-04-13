@@ -28,10 +28,10 @@
             </intent-filter>
         </activity>
 
-<!--        <service-->
-<!--            android:name=".data.service.FocusAudioService"-->
-<!--            android:exported="false"-->
-<!--            android:foregroundServiceType="mediaPlayback" />-->
+        <!--        <service-->
+        <!--            android:name=".data.service.FocusAudioService"-->
+        <!--            android:exported="false"-->
+        <!--            android:foregroundServiceType="mediaPlayback" />-->
     </application>
 
 </manifest>

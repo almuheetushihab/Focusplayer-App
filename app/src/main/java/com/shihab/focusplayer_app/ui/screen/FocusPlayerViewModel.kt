@@ -3,6 +3,7 @@ package com.shihab.focusplayer_app.ui.screen
 
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import com.shihab.focusplayer_app.data.service.FocusAudioService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,7 @@ class FocusPlayerViewModel : ViewModel() {
         val intent = Intent(context, FocusAudioService::class.java).apply {
             this.action = action
         }
-        context.startForegroundService(intent)
+
+        ContextCompat.startForegroundService(context, intent)
     }
 }
