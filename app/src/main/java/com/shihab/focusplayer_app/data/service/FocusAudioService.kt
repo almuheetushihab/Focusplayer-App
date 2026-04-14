@@ -1,77 +1,50 @@
 package com.shihab.focusplayer_app.data.service
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
 import android.content.Intent
-import android.media.MediaPlayer
-import android.os.Build
-import android.os.IBinder
-import androidx.core.app.NotificationCompat
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import com.shihab.focusplayer_app.R
+import androidx.core.net.toUri
 
+class FocusAudioService : MediaSessionService() {
 
-class FocusAudioService : Service() {
-
-    private var mediaPlayer: MediaPlayer? = null
-    private val CHANNEL_ID = "FocusAudioChannel"
+    private var mediaSession: MediaSession? = null
+    private lateinit var player: ExoPlayer
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        mediaPlayer = MediaPlayer.create(this, R.raw.asmr_typing)
-        mediaPlayer?.isLooping = true
+        player = ExoPlayer.Builder(this).build().apply {
+            val mediaItem = MediaItem.fromUri(
+                "android.resource://${packageName}/${R.raw.asmr_typing}".toUri()
+            )
+            setMediaItem(mediaItem)
+            repeatMode = Player.REPEAT_MODE_ALL
+            prepare()
+        }
+        mediaSession = MediaSession.Builder(this, player).build()
     }
 
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
-        val action = intent?.action
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-        when (action) {
-            "ACTION_PLAY" -> {
-                mediaPlayer?.start()
-                startForeground(1, createNotification("Playing ASMR Focus Audio..."))
-            }
-
-            "ACTION_PAUSE" -> {
-                mediaPlayer?.pause()
-                startForeground(1, createNotification("Audio Paused"))
-            }
-
-            "ACTION_STOP" -> {
-                mediaPlayer?.stop()
-                stopForeground(STOP_FOREGROUND_REMOVE)
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = mediaSession?.player
+        if (player != null) {
+            if (!player.playWhenReady || player.mediaItemCount == 0) {
                 stopSelf()
             }
         }
-        return START_NOT_STICKY
     }
-
-    private fun createNotification(contentText: String) =
-        NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Focus Player")
-            .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setOngoing(true)
-            .build()
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Focus Audio Service", NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
-        }
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        mediaPlayer?.release()
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
         super.onDestroy()
     }
 }
