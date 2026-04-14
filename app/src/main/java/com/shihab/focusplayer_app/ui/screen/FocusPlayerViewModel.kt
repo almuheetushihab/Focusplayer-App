@@ -149,11 +149,14 @@ class FocusPlayerViewModel : ViewModel() {
         sleepTimerJob?.cancel()
         if (minutes == 0) {
             _remainingTime.value = null
+            controller?.volume = _volume.value // Restore original volume
             return
         }
         
         val millis = minutes * 60 * 1000L
         _remainingTime.value = millis
+        
+        val fadeOutDuration = 30 * 1000L // শেষ ৩০ সেকেন্ডে ফেড-আউট শুরু হবে
         
         sleepTimerJob = viewModelScope.launch {
             var currentMillis = millis
@@ -161,16 +164,25 @@ class FocusPlayerViewModel : ViewModel() {
                 delay(1000)
                 currentMillis -= 1000
                 _remainingTime.value = currentMillis
+                
+                // ফেড-আউট লজিক: শেষ ৩০ সেকেন্ডে ভলিউম ধীরে ধীরে কমানো
+                if (currentMillis <= fadeOutDuration) {
+                    val fadePercentage = currentMillis.toFloat() / fadeOutDuration.toFloat()
+                    controller?.volume = _volume.value * fadePercentage
+                }
             }
-            // Timer finished
+            // টাইমার শেষ হলে অডিও বন্ধ করে দাও
             stopAudio()
             _remainingTime.value = null
+            // পরের বার চালানোর জন্য ভলিউম আগের জায়গায় ফিরিয়ে আনা
+            controller?.volume = _volume.value
         }
     }
 
     fun cancelSleepTimer() {
         sleepTimerJob?.cancel()
         _remainingTime.value = null
+        controller?.volume = _volume.value // টাইমার ক্যানসেল করলে ভলিউম আগের মতো করে দাও
     }
 
     override fun onCleared() {
