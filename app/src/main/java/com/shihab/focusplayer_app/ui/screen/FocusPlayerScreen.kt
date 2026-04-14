@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TimerOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,9 +33,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +63,9 @@ fun FocusPlayerScreen(
     val duration by viewModel.duration.collectAsState()
     val audioList by viewModel.audioList.collectAsState()
     val currentAudio by viewModel.currentAudio.collectAsState()
+    val remainingTime by viewModel.remainingTime.collectAsState()
+
+    var showTimerDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -61,23 +73,52 @@ fun FocusPlayerScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // Top Header
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Focus Player",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Choose your focus sound",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
+            Column {
+                Text(
+                    text = "Focus Player",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Choose your focus sound",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            
+            IconButton(onClick = { showTimerDialog = true }) {
+                Icon(
+                    imageVector = if (remainingTime != null) Icons.Default.Timer else Icons.Default.TimerOff,
+                    contentDescription = "Sleep Timer",
+                    tint = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+
+        if (remainingTime != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Sleep Timer: ${formatTime(remainingTime!!)} left",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
         // Sound List
@@ -107,6 +148,45 @@ fun FocusPlayerScreen(
             )
         }
     }
+
+    if (showTimerDialog) {
+        SleepTimerDialog(
+            onDismiss = { showTimerDialog = false },
+            onSelectTime = { minutes ->
+                viewModel.setSleepTimer(minutes)
+                showTimerDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun SleepTimerDialog(
+    onDismiss: () -> Unit,
+    onSelectTime: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Sleep Timer") },
+        text = {
+            Column {
+                val times = listOf(0, 5, 15, 30, 60)
+                times.forEach { mins ->
+                    TextButton(
+                        onClick = { onSelectTime(mins) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (mins == 0) "Off" else "$mins Minutes")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

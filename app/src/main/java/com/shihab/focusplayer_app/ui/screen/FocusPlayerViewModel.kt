@@ -41,15 +41,19 @@ class FocusPlayerViewModel : ViewModel() {
     private val _currentAudio = MutableStateFlow<AudioModel?>(null)
     val currentAudio: StateFlow<AudioModel?> = _currentAudio.asStateFlow()
 
+    // Sleep Timer States
+    private val _remainingTime = MutableStateFlow<Long?>(null) // in milliseconds
+    val remainingTime: StateFlow<Long?> = _remainingTime.asStateFlow()
+
     private var progressJob: Job? = null
+    private var sleepTimerJob: Job? = null
 
     init {
-        // Mock data - eventually this should come from a Repository
         _audioList.value = listOf(
             AudioModel(1, "Typing Focus", "Deep mechanical typing sound", R.raw.asmr_typing),
-            AudioModel(2, "Soft Rain", "Gentle rain on the window", R.raw.asmr_typing), // Placeholder
-            AudioModel(3, "Deep Forest", "Bird chirping and wind", R.raw.asmr_typing), // Placeholder
-            AudioModel(4, "Cafe Ambience", "Light chatter and coffee cups", R.raw.asmr_typing) // Placeholder
+            AudioModel(2, "Soft Rain", "Gentle rain on the window", R.raw.asmr_typing),
+            AudioModel(3, "Deep Forest", "Bird chirping and wind", R.raw.asmr_typing),
+            AudioModel(4, "Cafe Ambience", "Light chatter and coffee cups", R.raw.asmr_typing)
         )
     }
 
@@ -125,10 +129,40 @@ class FocusPlayerViewModel : ViewModel() {
 
     fun stopAudio() {
         controller?.stop()
+        cancelSleepTimer()
     }
 
     fun seekTo(position: Long) {
         controller?.seekTo(position)
+    }
+
+    // Sleep Timer Logic
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes == 0) {
+            _remainingTime.value = null
+            return
+        }
+        
+        val millis = minutes * 60 * 1000L
+        _remainingTime.value = millis
+        
+        sleepTimerJob = viewModelScope.launch {
+            var currentMillis = millis
+            while (currentMillis > 0) {
+                delay(1000)
+                currentMillis -= 1000
+                _remainingTime.value = currentMillis
+            }
+            // Timer finished
+            stopAudio()
+            _remainingTime.value = null
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        _remainingTime.value = null
     }
 
     override fun onCleared() {
