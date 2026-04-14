@@ -1,5 +1,10 @@
 package com.shihab.focusplayer_app.ui.screen
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TimerOff
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +72,7 @@ fun FocusPlayerScreen(
     val audioList by viewModel.audioList.collectAsState()
     val currentAudio by viewModel.currentAudio.collectAsState()
     val remainingTime by viewModel.remainingTime.collectAsState()
+    val volume by viewModel.volume.collectAsState()
 
     var showTimerDialog by remember { mutableStateOf(false) }
 
@@ -131,6 +140,7 @@ fun FocusPlayerScreen(
                 AudioItem(
                     audio = audio,
                     isSelected = currentAudio?.id == audio.id,
+                    isPlaying = isPlaying && currentAudio?.id == audio.id,
                     onClick = { viewModel.playAudio(audio, context) }
                 )
             }
@@ -143,8 +153,10 @@ fun FocusPlayerScreen(
                 currentPosition = currentPosition,
                 duration = duration,
                 currentAudio = currentAudio!!,
+                volume = volume,
                 onPlayPauseToggle = { viewModel.togglePlayPause() },
-                onSeek = { viewModel.seekTo(it) }
+                onSeek = { viewModel.seekTo(it) },
+                onVolumeChange = { viewModel.setVolume(it) }
             )
         }
     }
@@ -161,40 +173,23 @@ fun FocusPlayerScreen(
 }
 
 @Composable
-fun SleepTimerDialog(
-    onDismiss: () -> Unit,
-    onSelectTime: (Int) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set Sleep Timer") },
-        text = {
-            Column {
-                val times = listOf(0, 5, 15, 30, 60)
-                times.forEach { mins ->
-                    TextButton(
-                        onClick = { onSelectTime(mins) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (mins == 0) "Off" else "$mins Minutes")
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
 fun AudioItem(
     audio: AudioModel,
     isSelected: Boolean,
+    isPlaying: Boolean,
     onClick: () -> Unit
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isPlaying) 1.2f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -212,6 +207,7 @@ fun AudioItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
+                    .scale(scale)
                     .background(
                         if (isSelected) MaterialTheme.colorScheme.primary 
                         else MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
@@ -253,8 +249,10 @@ fun PlayerController(
     currentPosition: Long,
     duration: Long,
     currentAudio: AudioModel,
+    volume: Float,
     onPlayPauseToggle: () -> Unit,
-    onSeek: (Long) -> Unit
+    onSeek: (Long) -> Unit,
+    onVolumeChange: (Float) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -262,7 +260,7 @@ fun PlayerController(
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -271,8 +269,9 @@ fun PlayerController(
                 style = MaterialTheme.typography.titleMedium
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
+            // Progress Slider
             Slider(
                 value = currentPosition.toFloat(),
                 onValueChange = { onSeek(it.toLong()) },
@@ -288,7 +287,23 @@ fun PlayerController(
                 Text(text = formatTime(duration), style = MaterialTheme.typography.labelSmall)
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Volume Control
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.VolumeDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Slider(
+                    value = volume,
+                    onValueChange = onVolumeChange,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                )
+                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
             
             IconButton(
                 onClick = onPlayPauseToggle,
@@ -305,6 +320,35 @@ fun PlayerController(
             }
         }
     }
+}
+
+@Composable
+fun SleepTimerDialog(
+    onDismiss: () -> Unit,
+    onSelectTime: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Sleep Timer") },
+        text = {
+            Column {
+                val times = listOf(0, 5, 15, 30, 60)
+                times.forEach { mins ->
+                    TextButton(
+                        onClick = { onSelectTime(mins) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (mins == 0) "Off" else "$mins Minutes")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private fun formatTime(ms: Long): String {

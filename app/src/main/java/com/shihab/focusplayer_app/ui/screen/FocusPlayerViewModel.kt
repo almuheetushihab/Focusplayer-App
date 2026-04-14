@@ -41,6 +41,9 @@ class FocusPlayerViewModel : ViewModel() {
     private val _currentAudio = MutableStateFlow<AudioModel?>(null)
     val currentAudio: StateFlow<AudioModel?> = _currentAudio.asStateFlow()
 
+    private val _volume = MutableStateFlow(1.0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
     // Sleep Timer States
     private val _remainingTime = MutableStateFlow<Long?>(null) // in milliseconds
     val remainingTime: StateFlow<Long?> = _remainingTime.asStateFlow()
@@ -134,6 +137,11 @@ class FocusPlayerViewModel : ViewModel() {
 
     fun seekTo(position: Long) {
         controller?.seekTo(position)
+    }
+
+    fun setVolume(volume: Float) {
+        _volume.value = volume
+        controller?.volume = volume
     }
 
     // Sleep Timer Logic
