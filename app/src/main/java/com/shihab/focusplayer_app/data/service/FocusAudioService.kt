@@ -1,14 +1,9 @@
 package com.shihab.focusplayer_app.data.service
 
 import android.content.Intent
-import android.net.Uri
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.shihab.focusplayer_app.R
-import androidx.core.net.toUri
 
 class FocusAudioService : MediaSessionService() {
 
@@ -17,14 +12,7 @@ class FocusAudioService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this).build().apply {
-            val mediaItem = MediaItem.fromUri(
-                "android.resource://${packageName}/${R.raw.asmr_typing}".toUri()
-            )
-            setMediaItem(mediaItem)
-            repeatMode = Player.REPEAT_MODE_ALL
-            prepare()
-        }
+        player = ExoPlayer.Builder(this).build()
         mediaSession = MediaSession.Builder(this, player).build()
     }
 

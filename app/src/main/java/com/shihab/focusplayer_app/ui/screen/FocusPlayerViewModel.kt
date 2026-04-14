@@ -4,12 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.shihab.focusplayer_app.data.service.FocusAudioService
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import com.shihab.focusplayer_app.R
+import com.shihab.focusplayer_app.domain.model.AudioModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +35,23 @@ class FocusPlayerViewModel : ViewModel() {
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration.asStateFlow()
 
+    private val _audioList = MutableStateFlow<List<AudioModel>>(emptyList())
+    val audioList: StateFlow<List<AudioModel>> = _audioList.asStateFlow()
+
+    private val _currentAudio = MutableStateFlow<AudioModel?>(null)
+    val currentAudio: StateFlow<AudioModel?> = _currentAudio.asStateFlow()
+
     private var progressJob: Job? = null
+
+    init {
+        // Mock data - eventually this should come from a Repository
+        _audioList.value = listOf(
+            AudioModel(1, "Typing Focus", "Deep mechanical typing sound", R.raw.asmr_typing),
+            AudioModel(2, "Soft Rain", "Gentle rain on the window", R.raw.asmr_typing), // Placeholder
+            AudioModel(3, "Deep Forest", "Bird chirping and wind", R.raw.asmr_typing), // Placeholder
+            AudioModel(4, "Cafe Ambience", "Light chatter and coffee cups", R.raw.asmr_typing) // Placeholder
+        )
+    }
 
     fun initializeController(context: Context) {
         val sessionToken = SessionToken(context, ComponentName(context, FocusAudioService::class.java))
@@ -53,6 +72,11 @@ class FocusPlayerViewModel : ViewModel() {
                     if (playbackState == Player.STATE_READY) {
                         _duration.value = controller.duration
                     }
+                }
+
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    val currentId = mediaItem?.mediaId?.toIntOrNull()
+                    _currentAudio.value = _audioList.value.find { it.id == currentId }
                 }
             })
             _isPlaying.value = controller.isPlaying
@@ -75,17 +99,32 @@ class FocusPlayerViewModel : ViewModel() {
         progressJob?.cancel()
     }
 
-    fun playAudio() {
-        controller?.play()
+    fun playAudio(audio: AudioModel, context: Context) {
+        val controller = controller ?: return
+        
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(audio.id.toString())
+            .setUri("android.resource://${context.packageName}/${audio.audioResId}")
+            .build()
+            
+        controller.setMediaItem(mediaItem)
+        controller.repeatMode = Player.REPEAT_MODE_ALL
+        controller.prepare()
+        controller.play()
+        _currentAudio.value = audio
     }
 
-    fun pauseAudio() {
-        controller?.pause()
+    fun togglePlayPause() {
+        val controller = controller ?: return
+        if (controller.isPlaying) {
+            controller.pause()
+        } else {
+            controller.play()
+        }
     }
 
     fun stopAudio() {
         controller?.stop()
-        controller?.seekTo(0)
     }
 
     fun seekTo(position: Long) {
