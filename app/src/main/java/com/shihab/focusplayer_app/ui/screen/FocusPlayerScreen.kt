@@ -1,12 +1,7 @@
 package com.shihab.focusplayer_app.ui.screen
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TimerOff
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -50,13 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shihab.focusplayer_app.domain.model.AudioModel
+import com.shihab.focusplayer_app.domain.model.AudioState
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -65,14 +59,9 @@ fun FocusPlayerScreen(
     viewModel: FocusPlayerViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val isPlaying by viewModel.isPlaying.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
     val audioList by viewModel.audioList.collectAsState()
-    val currentAudio by viewModel.currentAudio.collectAsState()
+    val audioStates by viewModel.audioStates.collectAsState()
     val remainingTime by viewModel.remainingTime.collectAsState()
-    val volume by viewModel.volume.collectAsState()
 
     var showTimerDialog by remember { mutableStateOf(false) }
 
@@ -81,7 +70,7 @@ fun FocusPlayerScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Top Header
+        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -97,7 +86,7 @@ fun FocusPlayerScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "Choose your focus sound",
+                    text = "Mix your favorite sounds",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
@@ -130,34 +119,44 @@ fun FocusPlayerScreen(
             }
         }
 
-        // Sound List
+        // Sound List with Mixing Controls
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(audioList) { audio ->
-                AudioItem(
+                val state = audioStates[audio.id] ?: AudioState(audio.id)
+                AudioMixItem(
                     audio = audio,
-                    isSelected = currentAudio?.id == audio.id,
-                    isPlaying = isPlaying && currentAudio?.id == audio.id,
-                    onClick = { viewModel.playAudio(audio, context) }
+                    state = state,
+                    onToggle = { viewModel.toggleAudio(audio) },
+                    onVolumeChange = { viewModel.updateAudioVolume(audio.id, it) }
                 )
             }
         }
 
-        // Bottom Player Controller
-        if (currentAudio != null) {
-            PlayerController(
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                currentAudio = currentAudio!!,
-                volume = volume,
-                onPlayPauseToggle = { viewModel.togglePlayPause() },
-                onSeek = { viewModel.seekTo(it) },
-                onVolumeChange = { viewModel.setVolume(it) }
-            )
+        // Global Stop Button
+        if (audioStates.values.any { it.isPlaying }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(
+                    onClick = { viewModel.stopAll() },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.Stop,
+                        contentDescription = "Stop All",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 
@@ -173,150 +172,79 @@ fun FocusPlayerScreen(
 }
 
 @Composable
-fun AudioItem(
+fun AudioMixItem(
     audio: AudioModel,
-    isSelected: Boolean,
-    isPlaying: Boolean,
-    onClick: () -> Unit
+    state: AudioState,
+    onToggle: () -> Unit,
+    onVolumeChange: (Float) -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isPlaying) 1.2f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
+    val containerColor by animateColorAsState(
+        if (state.isPlaying) MaterialTheme.colorScheme.primaryContainer 
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        label = "color"
     )
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
-                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .scale(scale)
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary 
-                        else MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = if (isSelected) Color.White else MaterialTheme.colorScheme.secondary
-                )
-            }
-            
-            Spacer(modifier = Modifier.size(16.dp))
-            
-            Column {
-                Text(
-                    text = audio.title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer 
-                            else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = audio.description,
-                    fontSize = 14.sp,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerController(
-    isPlaying: Boolean,
-    currentPosition: Long,
-    duration: Long,
-    currentAudio: AudioModel,
-    volume: Float,
-    onPlayPauseToggle: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onVolumeChange: (Float) -> Unit
-) {
-    Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Playing: ${currentAudio.title}",
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium
-            )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Progress Slider
-            Slider(
-                value = currentPosition.toFloat(),
-                onValueChange = { onSeek(it.toLong()) },
-                valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(text = formatTime(currentPosition), style = MaterialTheme.typography.labelSmall)
-                Text(text = formatTime(duration), style = MaterialTheme.typography.labelSmall)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                if (state.isPlaying) MaterialTheme.colorScheme.primary 
+                                else MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = if (state.isPlaying) Color.White else MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(text = audio.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(text = audio.description, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                
+                IconButton(
+                    onClick = onToggle,
+                    modifier = Modifier.background(
+                        if (state.isPlaying) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        CircleShape
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = if (state.isPlaying) Color.White else MaterialTheme.colorScheme.primary
+                    )
+                }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
 
-            // Volume Control
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.VolumeDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Slider(
-                    value = volume,
-                    onValueChange = onVolumeChange,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                )
-                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            IconButton(
-                onClick = onPlayPauseToggle,
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(32.dp)
-                )
+            if (state.isPlaying) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.VolumeDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Slider(
+                        value = state.volume,
+                        onValueChange = onVolumeChange,
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    )
+                    Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
             }
         }
     }
